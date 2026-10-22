@@ -175,6 +175,7 @@ export function Typography({
 
 type AlertProps = Omit<ComponentPropsWithoutRef<'div'>, 'style'> & {
   severity?: 'error' | 'success' | 'info'
+  ref?: Ref<HTMLElement>
 }
 export function Alert({ severity = 'info', className, ...props }: AlertProps) {
   return (
@@ -217,21 +218,34 @@ export function TextField({
   ...props
 }: TextFieldProps) {
   const generatedId = useId()
+  const isCheckbox = props.type === 'checkbox'
+  const field = (
+    <Input
+      {...props}
+      ref={inputRef}
+      className={[styles.input, isCheckbox && styles.checkbox, inputClassName]
+        .filter(Boolean)
+        .join(' ')}
+    />
+  )
+  const textLabel = <Label className={styles.checkboxLabel}>{label}</Label>
   return (
     <AriaTextField
       id={id ?? generatedId}
       isInvalid={error}
       isDisabled={props.disabled}
-      className={[styles.textField, fullWidth && styles.fullWidth, className]
+      className={[
+        styles.textField,
+        isCheckbox && styles.checkboxField,
+        fullWidth && styles.fullWidth,
+        className,
+      ]
         .filter(Boolean)
         .join(' ')}
     >
-      <Label>{label}</Label>
-      <Input
-        {...props}
-        ref={inputRef}
-        className={[styles.input, inputClassName].filter(Boolean).join(' ')}
-      />
+      {/* A checkbox reads better with the control before its label; text fields keep the label above. */}
+      {isCheckbox ? field : <Label>{label}</Label>}
+      {isCheckbox ? textLabel : field}
       {Boolean(helperText) && (
         <Text
           slot={error ? 'errorMessage' : 'description'}

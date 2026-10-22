@@ -19,6 +19,11 @@
 .stepForm.stepForm {
   gap: 16px;
 }
+.formElement {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
 .formActions.formActions {
   align-items: center;
   justify-content: space-between;
