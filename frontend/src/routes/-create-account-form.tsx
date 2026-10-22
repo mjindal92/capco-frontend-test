@@ -8,7 +8,14 @@ import {
   TextField,
   Typography,
 } from '@kyc/ui'
-import { useEffect, useRef, useState } from 'react'
+import { useId, useState } from 'react'
+
+import {
+  passwordGuidance,
+  registerApplicant,
+  validatePassword,
+} from '../api/applicant-access'
+import { ApiError, fieldNameFromPointer } from '../api/client'
 
 import { accountAccessHref } from './-return-target'
 import styles from './account-access.module.css'
@@ -18,8 +25,26 @@ export interface CreateAccountFormProps {
   returnTo?: string
 }
 
-const passwordGuidance =
-  'Use at least six characters, including one uppercase letter and one special character.'
+type FieldKey = 'email' | 'password' | 'confirmPassword'
+type FieldErrors = Partial<Record<FieldKey, string>>
+
+function errorFor(failure: unknown): string {
+  if (!(failure instanceof ApiError)) {
+    return 'Something went wrong. Please try again.'
+  }
+  switch (failure.kind) {
+    case 'network':
+      return 'We could not reach the service. Check your connection and try again.'
+    case 'rate-limited':
+      return 'Too many attempts. Please wait a moment and try again.'
+    case 'conflict':
+      return 'An account with this email address already exists. Try signing in instead.'
+    case 'validation':
+      return 'Check the highlighted fields and try again.'
+    default:
+      return 'Something went wrong. Please try again.'
+  }
+}
 
 export function CreateAccountForm({
   onNavigate,
@@ -27,49 +52,101 @@ export function CreateAccountForm({
 }: CreateAccountFormProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [error, setError] = useState<string>()
-  const [emailError, setEmailError] = useState<string>()
-  const [passwordError, setPasswordError] = useState<string>()
-  const [successMessage, setSuccessMessage] = useState<string>()
-  const emailInput = useRef<HTMLInputElement>(null)
-  const passwordInput = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (emailError) {
-      emailInput.current?.focus()
-    } else if (passwordError) {
-      passwordInput.current?.focus()
-    }
-  }, [emailError, passwordError])
+  const [isPending, setIsPending] = useState(false)
+  const [isCreated, setIsCreated] = useState(false)
+  const errorSummaryId = useId()
 
   async function submit(): Promise<void> {
-    setError(undefined)
-    setEmailError(undefined)
-    setPasswordError(undefined)
-    setSuccessMessage(undefined)
+    if (isPending) return
 
-    try {
-      setPassword('')
-      setSuccessMessage(
-        'Account form is ready. Sign-in is available for this prototype.',
-      )
-    } catch {
-      setError('Account form could not be completed.')
+    const errors: FieldErrors = {}
+    const passwordError = validatePassword(password)
+    if (passwordError) errors.password = passwordError
+    if (confirmPassword !== password) {
+      errors.confirmPassword = 'Passwords do not match.'
     }
+
+    // Required-field validation is left to the browser so it can focus the first invalid input.
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors)
+      setError(undefined)
+      return
+    }
+
+    setFieldErrors({})
+    setError(undefined)
+    setIsPending(true)
+    try {
+      await registerApplicant({ email, password })
+      setPassword('')
+      setConfirmPassword('')
+      setIsCreated(true)
+    } catch (failure) {
+      if (failure instanceof ApiError) {
+        const fromApi: FieldErrors = {}
+        for (const fieldError of failure.fieldErrors) {
+          const field = fieldNameFromPointer(fieldError.pointer)
+          if (field === 'email' || field === 'password') {
+            fromApi[field] = fieldError.message
+          }
+        }
+        setFieldErrors(fromApi)
+      }
+      setError(errorFor(failure))
+    } finally {
+      setIsPending(false)
+    }
+  }
+
+  const signInHref = accountAccessHref('/sign-in', returnTo)
+
+  if (isCreated) {
+    return (
+      <main className={styles.page}>
+        <Card className={styles.card}>
+          <CardContent className={styles.cardContent}>
+            <Stack spacing={3}>
+              <Stack spacing={1}>
+                <Typography component="h1" variant="heading">
+                  Account created
+                </Typography>
+                <Typography tone="muted">
+                  Sign in with your new details to start your KYC application.
+                </Typography>
+              </Stack>
+              <Button
+                className={styles.submit}
+                fullWidth
+                onPress={() => {
+                  if (onNavigate) onNavigate(signInHref)
+                  else window.location.assign(signInHref)
+                }}
+              >
+                Go to sign in
+              </Button>
+            </Stack>
+          </CardContent>
+        </Card>
+      </main>
+    )
   }
 
   return (
     <main className={styles.page}>
       <Card className={styles.card}>
         <CardContent className={styles.cardContent}>
-          <Stack
-            component="form"
-            className={styles.form}
+          <form
+            aria-busy={isPending}
+            aria-describedby={error ? errorSummaryId : undefined}
+            className={styles.formElement}
+            noValidate
             onSubmit={(event) => {
               event.preventDefault()
               void submit()
             }}
-            spacing={3}
           >
             <Stack spacing={1}>
               <Typography component="h1" variant="heading">
@@ -79,28 +156,22 @@ export function CreateAccountForm({
                 Create credentials to begin your KYC application.
               </Typography>
             </Stack>
-            {(error ?? emailError ?? passwordError) ? (
-              <Alert aria-live="assertive" role="alert" severity="error">
-                {error ?? emailError ?? passwordError}
-              </Alert>
-            ) : null}
-            {successMessage ? (
-              <Alert aria-live="polite" role="status" severity="success">
-                {successMessage}
+            {error ? (
+              <Alert id={errorSummaryId} aria-live="assertive" severity="error">
+                {error}
               </Alert>
             ) : null}
             <TextField
               autoComplete="email"
-              error={Boolean(emailError)}
+              disabled={isPending}
+              error={Boolean(fieldErrors.email)}
               fullWidth
-              helperText={emailError}
-              id="applicant-email"
-              inputRef={emailInput}
+              helperText={fieldErrors.email}
               label="Email address"
               name="email"
               onChange={(event) => {
                 setEmail(event.target.value)
-                setEmailError(undefined)
+                setFieldErrors((current) => ({ ...current, email: undefined }))
               }}
               required
               type="email"
@@ -108,28 +179,50 @@ export function CreateAccountForm({
             />
             <TextField
               autoComplete="new-password"
-              error={Boolean(passwordError)}
+              disabled={isPending}
+              error={Boolean(fieldErrors.password)}
               fullWidth
-              helperText={passwordError ?? passwordGuidance}
-              id="applicant-password"
-              inputRef={passwordInput}
+              helperText={fieldErrors.password ?? passwordGuidance}
               label="Password"
               name="password"
               onChange={(event) => {
                 setPassword(event.target.value)
-                setPasswordError(undefined)
+                setFieldErrors((current) => ({
+                  ...current,
+                  password: undefined,
+                }))
               }}
               required
               type="password"
               value={password}
             />
+            <TextField
+              autoComplete="new-password"
+              disabled={isPending}
+              error={Boolean(fieldErrors.confirmPassword)}
+              fullWidth
+              helperText={fieldErrors.confirmPassword}
+              label="Confirm password"
+              name="confirmPassword"
+              onChange={(event) => {
+                setConfirmPassword(event.target.value)
+                setFieldErrors((current) => ({
+                  ...current,
+                  confirmPassword: undefined,
+                }))
+              }}
+              required
+              type="password"
+              value={confirmPassword}
+            />
             <Button
               className={styles.submit}
               fullWidth
+              isPending={isPending}
               size="large"
               type="submit"
             >
-              Create account
+              {isPending ? 'Creating account...' : 'Create account'}
             </Button>
             <Typography
               className={styles.footer}
@@ -138,18 +231,18 @@ export function CreateAccountForm({
             >
               <span>Already have an account? </span>
               <Link
-                href={accountAccessHref('/sign-in', returnTo)}
+                href={signInHref}
                 onClick={(event) => {
                   if (onNavigate) {
                     event.preventDefault()
-                    onNavigate(accountAccessHref('/sign-in', returnTo))
+                    onNavigate(signInHref)
                   }
                 }}
               >
                 Sign in
               </Link>
             </Typography>
-          </Stack>
+          </form>
         </CardContent>
       </Card>
     </main>
