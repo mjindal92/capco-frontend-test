@@ -21,6 +21,7 @@ export interface ApplicantJourneyPresentationFixture {
 
 export interface ApplicantJourneyPresentationProps extends ApplicantJourneyPresentationFixture {
   onPrimaryAction: () => void
+  isPrimaryActionPending?: boolean
 }
 
 export const applicantJourneyFixtures = {
@@ -73,6 +74,7 @@ export function ApplicantJourneyPresentation({
   entryState,
   progress,
   onPrimaryAction,
+  isPrimaryActionPending = false,
 }: ApplicantJourneyPresentationProps) {
   const stateCopy = copy[entryState]
 
@@ -133,13 +135,15 @@ export function ApplicantJourneyPresentation({
             </Box>
 
             <Button
+              aria-busy={isPrimaryActionPending}
               aria-describedby="journey-description journey-progress"
               fullWidth
+              isPending={isPrimaryActionPending}
               onClick={onPrimaryAction}
               size="large"
               className={styles.action}
             >
-              {stateCopy.action}
+              {isPrimaryActionPending ? 'Starting application...' : stateCopy.action}
             </Button>
           </Stack>
         </CardContent>
