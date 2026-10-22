@@ -12,8 +12,15 @@ export function parseAccountAccessSearch(
     : {}
 }
 
+/** Application ids are UUIDs in the API contract. */
+export const APPLICATION_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** Restricts navigation to applicant form routes, which use UUID application ids. */
 export function isSafeJourneyPath(path: string): boolean {
-  return path.startsWith('/applications/') && !path.startsWith('//')
+  return /^\/applications\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(personal-details|identity-and-address)$/i.test(
+    path,
+  )
 }
 
 export function accountAccessHref(

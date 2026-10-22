@@ -8,7 +8,10 @@ import {
   TextField,
   Typography,
 } from '@kyc/ui'
-import { useEffect, useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
+
+import { defaultJourneyPath, signInApplicant } from '../api/applicant-access'
+import { ApiError } from '../api/client'
 
 import { accountAccessHref, isSafeJourneyPath } from './-return-target'
 import styles from './account-access.module.css'
@@ -16,47 +19,58 @@ import styles from './account-access.module.css'
 export interface SignInFormProps {
   onNavigate?: (href: string) => void
   returnTo?: string
-  onSuccess: (href: string) => void
 }
 
-export function SignInForm({
-  onNavigate,
-  returnTo,
-  onSuccess,
-}: SignInFormProps) {
+const invalidCredentialsMessage =
+  'The email or password you entered is incorrect. Please try again.'
+
+function errorFor(failure: unknown): string {
+  if (!(failure instanceof ApiError)) {
+    return 'Sign-in could not be completed. Please try again.'
+  }
+  switch (failure.kind) {
+    case 'authentication':
+      return invalidCredentialsMessage
+    case 'network':
+      return 'We could not reach the service. Check your connection and try again.'
+    case 'rate-limited':
+      return 'Too many attempts. Please wait a moment and try again.'
+    case 'validation':
+      return 'Enter a valid email address and password.'
+    default:
+      return 'Sign-in could not be completed. Please try again.'
+  }
+}
+
+export function SignInForm({ onNavigate, returnTo }: SignInFormProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string>()
-  const [emailError, setEmailError] = useState<string>()
-  const [passwordError, setPasswordError] = useState<string>()
-  const emailInput = useRef<HTMLInputElement>(null)
-  const passwordInput = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (emailError) {
-      emailInput.current?.focus()
-    } else if (passwordError) {
-      passwordInput.current?.focus()
-    }
-  }, [emailError, passwordError])
+  const [isPending, setIsPending] = useState(false)
+  const errorSummaryId = useId()
+  const errorAlert = useRef<HTMLDivElement>(null)
 
   async function submit(): Promise<void> {
-    setError(undefined)
-    setEmailError(undefined)
-    setPasswordError(undefined)
+    if (isPending) return
 
+    setError(undefined)
+    setIsPending(true)
     try {
-      const destination = returnTo ?? '/applications/current'
-      if (!isSafeJourneyPath(destination)) {
-        throw new Error('The destination is invalid.')
-      }
-      onSuccess(destination)
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : 'Account access could not be completed.',
-      )
+      const journeyUrl = await signInApplicant({ email, password })
+      // The API decides where the Applicant resumes. Both accepted destinations are local
+      // routes: the form route it returned, or the landing page when none was usable.
+      const destination =
+        returnTo ??
+        (isSafeJourneyPath(journeyUrl) ? journeyUrl : defaultJourneyPath)
+      if (onNavigate) onNavigate(destination)
+      else window.location.assign(destination)
+    } catch (failure) {
+      setPassword('')
+      setError(errorFor(failure))
+      // The email is intentionally kept so the Applicant can correct the password.
+      errorAlert.current?.focus()
+    } finally {
+      setIsPending(false)
     }
   }
 
@@ -64,14 +78,14 @@ export function SignInForm({
     <main className={styles.page}>
       <Card className={styles.card}>
         <CardContent className={styles.cardContent}>
-          <Stack
-            component="form"
-            className={styles.form}
+          <form
+            aria-busy={isPending}
+            aria-describedby={error ? errorSummaryId : undefined}
+            className={styles.formElement}
             onSubmit={(event) => {
               event.preventDefault()
               void submit()
             }}
-            spacing={3}
           >
             <Stack spacing={1}>
               <Typography component="h1" variant="heading">
@@ -81,41 +95,35 @@ export function SignInForm({
                 Sign in to continue your KYC application.
               </Typography>
             </Stack>
-            {(error ?? emailError ?? passwordError) ? (
-              <Alert aria-live="assertive" role="alert" severity="error">
-                {error ?? emailError ?? passwordError}
+            {error ? (
+              <Alert
+                id={errorSummaryId}
+                aria-live="assertive"
+                ref={errorAlert}
+                severity="error"
+                tabIndex={-1}
+              >
+                {error}
               </Alert>
             ) : null}
             <TextField
               autoComplete="email"
-              error={Boolean(emailError)}
+              disabled={isPending}
               fullWidth
-              helperText={emailError}
-              id="applicant-email"
-              inputRef={emailInput}
               label="Email address"
               name="email"
-              onChange={(event) => {
-                setEmail(event.target.value)
-                setEmailError(undefined)
-              }}
+              onChange={(event) => setEmail(event.target.value)}
               required
               type="email"
               value={email}
             />
             <TextField
               autoComplete="current-password"
-              error={Boolean(passwordError)}
+              disabled={isPending}
               fullWidth
-              helperText={passwordError}
-              id="applicant-password"
-              inputRef={passwordInput}
               label="Password"
               name="password"
-              onChange={(event) => {
-                setPassword(event.target.value)
-                setPasswordError(undefined)
-              }}
+              onChange={(event) => setPassword(event.target.value)}
               required
               type="password"
               value={password}
@@ -123,11 +131,15 @@ export function SignInForm({
             <Button
               className={styles.submit}
               fullWidth
+              isPending={isPending}
               size="large"
               type="submit"
             >
-              Sign in
+              {isPending ? 'Signing in...' : 'Sign in'}
             </Button>
+            <Typography aria-live="polite" role="status" variant="caption">
+              {isPending ? 'Signing in, please wait.' : ''}
+            </Typography>
             <Typography
               className={styles.footer}
               align="center"
@@ -146,7 +158,7 @@ export function SignInForm({
                 Create account
               </Link>
             </Typography>
-          </Stack>
+          </form>
         </CardContent>
       </Card>
     </main>
