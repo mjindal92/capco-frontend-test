@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   Link,
   Stack,
   TextField,
@@ -18,17 +19,21 @@ import {
   getApplicationForm,
   saveApplicationForm,
   stepFields,
-  type Answers,
   type FieldName,
   type Step,
 } from '../../../api/application-form'
 import { ApiError, fieldNameFromPointer } from '../../../api/client'
+import {
+  answersFromValues,
+  isCheckboxField,
+  validateForSubmit,
+  valuesFromAnswers,
+  type FieldErrors,
+  type FormValues,
+} from '../../../api/draft-answers'
 import styles from '/src/routes/application-step.module.css'
 
 import type { Route } from './+types/$step'
-
-type FormValues = Partial<Record<FieldName, string | boolean>>
-type FieldErrors = Partial<Record<FieldName, string>>
 
 const labels: Record<FieldName, string> = {
   name: 'Full name',
@@ -49,21 +54,10 @@ const labels: Record<FieldName, string> = {
 }
 
 const dateFields = new Set<FieldName>(['dateOfBirth', 'expiry'])
-const checkboxFields = new Set<FieldName>(['consentConfirmed'])
 
 const stepTitles: Record<Step, string> = {
   'personal-details': 'Personal details',
   'identity-and-address': 'Identity and address',
-}
-
-/** Copies the saved answers for one step into form state, normalising nulls to empty values. */
-function valuesFromAnswers(step: Step, answers: Answers): FormValues {
-  const values: FormValues = {}
-  for (const field of stepFields[step]) {
-    const saved = answers[field]
-    values[field] = typeof saved === 'boolean' ? saved : (saved ?? '')
-  }
-  return values
 }
 
 function saveFailureMessage(failure: ApiError | Error): string {
@@ -251,27 +245,24 @@ function StepForm({ applicationId, step, formQuery }: StepFormProps) {
     setSaveConfirmation(undefined)
   }
 
-  async function save(): Promise<void> {
+  /**
+   * Saves the current step. A draft may hold unanswered fields, so empty answers are
+   * accepted; `advance` additionally requires the step to be complete.
+   */
+  async function save(advance: boolean): Promise<void> {
     if (isSaving) return
-    const answers: Answers = {}
-    const errors: FieldErrors = {}
-    for (const field of stepFields[step]) {
-      const value = values?.[field]
-      if (checkboxFields.has(field)) {
-        answers[field] = value === true
-        continue
+    const { answers } = answersFromValues(step, values ?? {})
+    if (advance) {
+      const errors = validateForSubmit(step, values ?? {})
+      if (Object.keys(errors).length > 0) {
+        setFieldErrors(errors)
+        setSaveError('Complete the required fields before continuing.')
+        setSaveConfirmation(undefined)
+        return
       }
-      const text = typeof value === 'string' ? value.trim() : ''
-      if (!text) errors[field] = 'This field is required.'
-      answers[field] = text
-    }
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors)
-      setSaveError('Complete the required fields before saving.')
-      setSaveConfirmation(undefined)
-      return
     }
 
+    setFieldErrors({})
     setSaveError(undefined)
     setSaveConfirmation(undefined)
     setIsConflicted(false)
@@ -287,9 +278,9 @@ function StepForm({ applicationId, step, formQuery }: StepFormProps) {
       // Share the confirmed state so the next step starts from the bumped version.
       queryClient.setQueryData(['application-form', applicationId], saved)
       setSaveConfirmation('Your answers were saved.')
-      // The API decides which step is now current; only a confirmed save advances.
+      // The API decides which step is now current; only a confirmed advance navigates.
       const nextStep = saved.attributes.currentStep
-      if (nextStep !== step) {
+      if (advance && nextStep !== step) {
         navigate(`/applications/${applicationId}/${nextStep}`)
       }
     } catch (failure) {
@@ -355,22 +346,20 @@ function StepForm({ applicationId, step, formQuery }: StepFormProps) {
             noValidate
             onSubmit={(event) => {
               event.preventDefault()
-              void save()
+              void save(true)
             }}
           >
             {stepFields[step].map((field) =>
-              checkboxFields.has(field) ? (
-                <TextField
-                  disabled={isSaving}
+              isCheckboxField(field) ? (
+                <Checkbox
+                  isDisabled={isSaving}
                   error={Boolean(fieldErrors[field])}
                   helperText={fieldErrors[field]}
+                  isSelected={values[field] === true}
                   key={field}
                   label={labels[field]}
                   name={field}
-                  onChange={(event) => updateValue(field, event.target.checked)}
-                  type="checkbox"
-                  value=""
-                  {...(values[field] === true ? { checked: true } : {})}
+                  onChange={(isSelected) => updateValue(field, isSelected)}
                 />
               ) : (
                 <TextField
@@ -407,9 +396,22 @@ function StepForm({ applicationId, step, formQuery }: StepFormProps) {
               >
                 Back
               </Button>
-              <Button isPending={isSaving} type="submit">
-                {step === 'personal-details' ? 'Save and continue' : 'Save'}
-              </Button>
+              {/* Save actions stay in one cluster so they read as the primary pair. */}
+              <Stack component="div" direction="row" spacing={2}>
+                <Button
+                  isPending={isSaving}
+                  onPress={() => void save(false)}
+                  type="button"
+                  variant="secondary"
+                >
+                  Save
+                </Button>
+                <Button isPending={isSaving} type="submit">
+                  {step === 'personal-details'
+                    ? 'Save and continue'
+                    : 'Save and review'}
+                </Button>
+              </Stack>
             </Stack>
           </form>
         </Stack>

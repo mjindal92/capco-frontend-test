@@ -7,6 +7,7 @@ export {
   Box,
   Card,
   CardContent,
+  Checkbox,
   Link,
   Stack,
   Table,
@@ -18,4 +19,4 @@ export {
   TextField,
   Typography,
 } from './Primitives'
-export type { CardProps, TextFieldProps } from './Primitives'
+export type { CardProps, CheckboxProps, TextFieldProps } from './Primitives'

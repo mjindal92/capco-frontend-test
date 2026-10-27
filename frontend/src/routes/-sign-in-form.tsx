@@ -53,7 +53,14 @@ export function SignInForm({ onNavigate, returnTo }: SignInFormProps) {
   async function submit(): Promise<void> {
     if (isPending) return
 
-    setError(undefined)
+    // An empty form is rejected locally so it never consumes a sign-in attempt.
+    const missing = !email.trim() || !password
+    setError(missing ? 'Enter your email address and password.' : undefined)
+    if (missing) {
+      errorAlert.current?.focus()
+      return
+    }
+
     setIsPending(true)
     try {
       const journeyUrl = await signInApplicant({ email, password })
@@ -82,6 +89,7 @@ export function SignInForm({ onNavigate, returnTo }: SignInFormProps) {
             aria-busy={isPending}
             aria-describedby={error ? errorSummaryId : undefined}
             className={styles.formElement}
+            noValidate
             onSubmit={(event) => {
               event.preventDefault()
               void submit()

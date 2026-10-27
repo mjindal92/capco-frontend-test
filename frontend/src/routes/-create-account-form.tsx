@@ -63,16 +63,17 @@ export function CreateAccountForm({
     if (isPending) return
 
     const errors: FieldErrors = {}
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail) errors.email = 'Email address is required.'
     const passwordError = validatePassword(password)
     if (passwordError) errors.password = passwordError
     if (confirmPassword !== password) {
       errors.confirmPassword = 'Passwords do not match.'
     }
 
-    // Required-field validation is left to the browser so it can focus the first invalid input.
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors)
-      setError(undefined)
+      setError('Check the highlighted fields and try again.')
       return
     }
 
@@ -80,7 +81,7 @@ export function CreateAccountForm({
     setError(undefined)
     setIsPending(true)
     try {
-      await registerApplicant({ email, password })
+      await registerApplicant({ email: trimmedEmail, password })
       setPassword('')
       setConfirmPassword('')
       setIsCreated(true)

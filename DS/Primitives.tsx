@@ -8,6 +8,8 @@ import {
 } from 'react'
 import {
   Cell,
+  Checkbox as AriaCheckbox,
+  CheckboxField as AriaCheckboxField,
   Column,
   Form as AriaForm,
   Group,
@@ -21,6 +23,7 @@ import {
   Text,
   TextField as AriaTextField,
   type CellProps,
+  type CheckboxProps as AriaCheckboxProps,
   type ColumnProps,
   type FormProps,
   type GroupProps,
@@ -218,34 +221,21 @@ export function TextField({
   ...props
 }: TextFieldProps) {
   const generatedId = useId()
-  const isCheckbox = props.type === 'checkbox'
-  const field = (
-    <Input
-      {...props}
-      ref={inputRef}
-      className={[styles.input, isCheckbox && styles.checkbox, inputClassName]
-        .filter(Boolean)
-        .join(' ')}
-    />
-  )
-  const textLabel = <Label className={styles.checkboxLabel}>{label}</Label>
   return (
     <AriaTextField
       id={id ?? generatedId}
       isInvalid={error}
       isDisabled={props.disabled}
-      className={[
-        styles.textField,
-        isCheckbox && styles.checkboxField,
-        fullWidth && styles.fullWidth,
-        className,
-      ]
+      className={[styles.textField, fullWidth && styles.fullWidth, className]
         .filter(Boolean)
         .join(' ')}
     >
-      {/* A checkbox reads better with the control before its label; text fields keep the label above. */}
-      {isCheckbox ? field : <Label>{label}</Label>}
-      {isCheckbox ? textLabel : field}
+      <Label>{label}</Label>
+      <Input
+        {...props}
+        ref={inputRef}
+        className={[styles.input, inputClassName].filter(Boolean).join(' ')}
+      />
       {Boolean(helperText) && (
         <Text
           slot={error ? 'errorMessage' : 'description'}
@@ -255,6 +245,54 @@ export function TextField({
         </Text>
       )}
     </AriaTextField>
+  )
+}
+
+export type CheckboxProps = Omit<
+  AriaCheckboxProps,
+  'className' | 'style' | 'children'
+> & {
+  label: ReactNode
+  helperText?: ReactNode
+  error?: boolean
+  className?: string
+}
+/**
+ * React Aria clips the native input to 1px, so a visible box is drawn here. Its checked
+ * styling hangs off `[data-selected]`, which `Checkbox` sets on itself when selected.
+ */
+export function Checkbox({
+  label,
+  helperText,
+  error = false,
+  className,
+  ...props
+}: CheckboxProps) {
+  return (
+    <AriaCheckboxField isInvalid={error}>
+      <AriaCheckbox
+        aria-label={typeof label === 'string' ? label : undefined}
+        className={[styles.checkboxField, className].filter(Boolean).join(' ')}
+        {...props}
+      >
+        <span
+          aria-hidden="true"
+          className={styles.checkboxControl}
+          data-visible-control=""
+        >
+          &#10003;
+        </span>
+        <span className={styles.checkboxLabel}>{label}</span>
+      </AriaCheckbox>
+      {Boolean(helperText) && (
+        <Text
+          slot={error ? 'errorMessage' : 'description'}
+          className={styles.description}
+        >
+          {helperText}
+        </Text>
+      )}
+    </AriaCheckboxField>
   )
 }
 

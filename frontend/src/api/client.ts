@@ -97,10 +97,9 @@ async function toApiError(response: Response): Promise<ApiError> {
 /** The API requires this token on authenticated writes; it mirrors the XSRF-TOKEN cookie. */
 export function readCsrfToken(): string | undefined {
   if (typeof document === 'undefined') return undefined
-  return document.cookie
-    .split('; ')
-    .find((entry) => entry.startsWith('XSRF-TOKEN='))
-    ?.slice('XSRF-TOKEN='.length)
+  // Cookies are not guaranteed to be space-separated, so match the delimiter explicitly.
+  const match = /(?:^|;\s*)XSRF-TOKEN=([^;]*)/.exec(document.cookie)
+  return match?.[1] ? decodeURIComponent(match[1]) : undefined
 }
 
 export interface ApiRequestOptions {

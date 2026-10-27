@@ -26,6 +26,7 @@
 }
 .formActions.formActions {
   align-items: center;
+  /* Back sits alone on the left; the save pair is pushed to the right. */
   justify-content: space-between;
 }
 

@@ -34,7 +34,7 @@ export default function SubmissionReceiptPage() {
         </Alert>
         <Button
           variant="quiet"
-          onClick={() => void navigate('/applications/current')}
+          onPress={() => void navigate('/applications/current')}
         >
           DONE
         </Button>

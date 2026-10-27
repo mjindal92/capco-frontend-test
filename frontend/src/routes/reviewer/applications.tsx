@@ -15,7 +15,6 @@ import {
   TextField,
   Typography,
 } from '@kyc/ui'
-import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { z } from 'zod'
 
@@ -283,14 +282,14 @@ export function ReviewerApplicationsView({
                     variant="secondary"
                     disabled={page <= 0}
                     aria-label="Previous page"
-                    onClick={() => onPage(page - 1)}
+                    onPress={() => onPage(page - 1)}
                   >
                     Previous
                   </Button>
                   <Button
                     disabled={page + 1 >= pageCount}
                     aria-label="Next page"
-                    onClick={() => onPage(page + 1)}
+                    onPress={() => onPage(page + 1)}
                   >
                     Next
                   </Button>
@@ -402,7 +401,7 @@ function EmptyResults({
             ? `Status: ${statusLabel(status)}.`
             : 'Try a broader search or status.'}
         </Typography>
-        <Button variant="secondary" onClick={onClear}>
+        <Button variant="secondary" onPress={onClear}>
           Clear search and status
         </Button>
       </CardContent>
@@ -434,15 +433,13 @@ export default function ReviewerApplicationsPage({
 }: Route.ComponentProps) {
   const navigate = useNavigate()
   const { q, status, page, response } = loaderData
-  const [searchValue, setSearchValue] = useState(q)
-  useEffect(() => setSearchValue(q), [q])
   const updateSearch = (next: {
     q?: string
     status?: ReviewerApplicationStatus
     page?: number
   }) => {
     const search = new URLSearchParams({
-      q: next.q !== undefined ? next.q : searchValue,
+      q: next.q !== undefined ? next.q : q,
       status: next.status ?? status,
       page: String(next.page ?? page),
     })
@@ -451,11 +448,10 @@ export default function ReviewerApplicationsPage({
   return (
     <ReviewerApplicationsView
       response={response}
-      q={searchValue}
+      q={q}
       status={status}
       page={page}
       onSearch={(value) => {
-        setSearchValue(value)
         updateSearch({ q: value, page: 0 })
       }}
       onStatus={(value) => updateSearch({ status: value, page: 0 })}

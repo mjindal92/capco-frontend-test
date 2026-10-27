@@ -1,4 +1,5 @@
 import { Button } from '@kyc/ui'
+import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Outlet, useNavigate } from 'react-router'
 
@@ -13,6 +14,7 @@ import styles from './applications-layout.module.css'
  */
 export default function ApplicationsLayout() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [error, setError] = useState<string>()
 
@@ -22,6 +24,8 @@ export default function ApplicationsLayout() {
     setError(undefined)
     try {
       await signOutApplicant()
+      // Cached draft answers are PII, so they must not outlive the session.
+      queryClient.clear()
       void navigate('/sign-in', { replace: true })
     } catch (failure) {
       setError(

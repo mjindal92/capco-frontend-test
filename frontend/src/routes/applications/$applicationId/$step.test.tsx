@@ -198,7 +198,7 @@ describe('Application step form', () => {
     await user.click(screen.getByRole('button', { name: 'Save and continue' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Complete the required fields before saving',
+      'Complete the required fields before continuing',
     )
     expect(screen.queryByText('Your answers were saved.')).toBeNull()
     expect(name).toHaveValue('Changed Name')

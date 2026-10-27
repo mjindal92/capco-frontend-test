@@ -139,11 +139,13 @@ export function ApplicantJourneyPresentation({
               aria-describedby="journey-description journey-progress"
               fullWidth
               isPending={isPrimaryActionPending}
-              onClick={onPrimaryAction}
+              onPress={onPrimaryAction}
               size="large"
               className={styles.action}
             >
-              {isPrimaryActionPending ? 'Starting application...' : stateCopy.action}
+              {isPrimaryActionPending
+                ? 'Starting application...'
+                : stateCopy.action}
             </Button>
           </Stack>
         </CardContent>

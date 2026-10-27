@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
@@ -8,6 +9,8 @@ import { server } from '../test/server'
 
 import ApplicationsLayout from './applications'
 
+const client = new QueryClient()
+
 function renderLayout() {
   const Stub = createRoutesStub([
     {
@@ -17,7 +20,11 @@ function renderLayout() {
     },
     { path: '/sign-in', Component: () => <p>Sign in page</p> },
   ])
-  render(<Stub initialEntries={['/applications']} />)
+  render(
+    <QueryClientProvider client={client}>
+      <Stub initialEntries={['/applications']} />
+    </QueryClientProvider>,
+  )
   return userEvent.setup()
 }
 
@@ -70,5 +77,22 @@ describe('ApplicationsLayout sign out', () => {
     await user.click(screen.getByRole('button', { name: 'Sign out' }))
 
     await waitFor(() => expect(screen.getByText('Sign in page')).toBeVisible())
+  })
+
+  it('drops cached personal data when the session ends', async () => {
+    server.use(
+      http.delete(
+        '/api/v1/applicant-sessions/current',
+        () => new HttpResponse(null, { status: 204 }),
+      ),
+    )
+    client.setQueryData(['application-form', 'draft'], { name: 'Ada Lovelace' })
+
+    const user = renderLayout()
+    await user.click(screen.getByRole('button', { name: 'Sign out' }))
+
+    await waitFor(() => expect(screen.getByText('Sign in page')).toBeVisible())
+    // Another Applicant must not see this one's cached answers.
+    expect(client.getQueryData(['application-form', 'draft'])).toBeUndefined()
   })
 })

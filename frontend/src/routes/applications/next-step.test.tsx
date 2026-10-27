@@ -63,20 +63,15 @@ function renderStep(step: 'personal-details' | 'identity-and-address') {
 }
 
 describe('advancing to the next step', () => {
-  it('renders the consent checkbox inline to the left of its label', async () => {
+  it('renders the consent as a checkbox with an accessible name', async () => {
     server.use(http.get(formUrl, () => formResponse({}, 'personal-details')))
 
     renderStep('personal-details')
-    const checkbox = await screen.findByLabelText(
-      'I confirm these details are accurate and belong to me.',
-    )
-    const [first, second] = Array.from(checkbox.parentElement?.children ?? [])
+    const checkbox = await screen.findByRole('checkbox', {
+      name: 'I confirm these details are accurate and belong to me.',
+    })
 
-    expect(first).toBe(checkbox)
-    expect(second?.tagName).toBe('LABEL')
-    expect(second?.textContent).toBe(
-      'I confirm these details are accurate and belong to me.',
-    )
+    expect(checkbox.getAttribute('type')).toBe('checkbox')
   })
 
   it('shows the identity step after saving complete personal details', async () => {
@@ -136,5 +131,29 @@ describe('advancing to the next step', () => {
     expect(
       screen.getByRole('heading', { name: 'Personal details' }),
     ).toBeVisible()
+  })
+
+  it('saves a partially completed step without leaving the form', async () => {
+    let savedBody: { data?: { attributes?: Record<string, unknown> } } = {}
+    server.use(
+      http.get(formUrl, () => formResponse({}, 'personal-details')),
+      http.patch(formUrl, async ({ request }) => {
+        savedBody = (await request.json()) as typeof savedBody
+        return formResponse({ name: 'Ada Lovelace' }, 'personal-details')
+      }),
+    )
+
+    const { user } = renderStep('personal-details')
+    await user.type(await screen.findByLabelText('Full name'), 'Ada Lovelace')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByText('Your answers were saved.')).toBeVisible()
+    // Partial answers persist, so the Applicant stays on the step to keep editing.
+    expect(
+      screen.getByRole('heading', { name: 'Personal details' }),
+    ).toBeVisible()
+    expect(savedBody.data?.attributes?.answers).toMatchObject({
+      name: 'Ada Lovelace',
+    })
   })
 })
